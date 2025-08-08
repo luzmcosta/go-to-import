@@ -2,7 +2,7 @@
   "name": "go-to-import",
   "displayName": "Go to Import",
   "description": "Jump to files by clicking on import statement file names",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "luzmcosta",
   "repository": {
     "type": "git",
