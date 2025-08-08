@@ -1,0 +1,13 @@
+/* Sample CSS file */
+@import './base.css';
+@import '../fonts/fonts.css';
+@import 'normalize.css';
+
+body {
+    font-family: 'Arial', sans-serif;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
