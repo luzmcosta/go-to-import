@@ -4,6 +4,35 @@ All notable changes to the "go-to-import" extension will be documented in this f
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.0.4] - 2025-08-08 - Enhanced Navigation & Customization
+
+### Added
+- **UX**: Multiple access methods for navigation
+  - Keyboard shortcut: `Cmd+Shift+G` (Mac) / `Ctrl+Shift+G` (Windows/Linux)
+  - Context menu: Right-click → "Jump to Import File"
+  - Status bar: Clickable "Go to Import" button
+  - Command palette: "Jump to Import File" command
+- **Configuration**: New extension settings
+  - `go-to-import.enableStatusBar`: Toggle status bar button
+  - `go-to-import.showHelpNotification`: Toggle macOS conflict notifications
+- **macOS**: Smart detection of Cmd+Click conflicts with multi-cursor
+- **UX**: One-time helpful notification with direct settings access
+- **UX**: Platform-specific tooltips showing correct modifier keys
+- **Navigation**: Quick-pick menu when cursor not on import path
+- **Navigation**: Cursor position detection for precise jumping
+
+### Changed
+- **UX**: Improved user guidance for Cmd+Click conflicts on macOS
+- **UX**: Status bar button only appears in supported file types
+- **UX**: Enhanced tooltips with platform-specific instructions
+- **Documentation**: Comprehensive README with troubleshooting guide
+- **Documentation**: Added configuration and customization sections
+
+### Fixed
+- **macOS**: Provides clear solutions for Cmd+Click creating multiple cursors
+- **UX**: Better error messages and user feedback
+- **Navigation**: More reliable cursor position detection
+
 ## [0.0.3] - 2025-08-08 - Security Update
 
 ### Added
@@ -38,7 +67,3 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Support for CSS imports
 - Intelligent path resolution
 - Multi-language detection
-
-## [Unreleased]
-
-- Initial release

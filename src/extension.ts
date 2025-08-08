@@ -95,6 +95,10 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 				const resolvedPath = this.resolveImportPath(document, importPath);
 				if (resolvedPath) {
 					const link = new vscode.DocumentLink(range, vscode.Uri.file(resolvedPath));
+					// Add tooltip with platform-specific instructions
+					const isMac = process.platform === 'darwin';
+					const modifier = isMac ? 'Cmd' : 'Ctrl';
+					link.tooltip = `Jump to ${path.basename(resolvedPath)} (${modifier}+Click, or right-click for context menu)`;
 					links.push(link);
 				}
 			}
@@ -377,6 +381,33 @@ export function activate(context: vscode.ExtensionContext) {
 		return;
 	}
 
+	// Show helpful message about Cmd-Click on macOS
+	if (process.platform === 'darwin') {
+		const config = vscode.workspace.getConfiguration('editor');
+		const goToImportConfig = vscode.workspace.getConfiguration('go-to-import');
+		const multiCursorModifier = config.get('multiCursorModifier');
+		const showHelpNotification = goToImportConfig.get('showHelpNotification', true);
+
+		if (multiCursorModifier === 'ctrlCmd' && showHelpNotification) {
+			console.log('Go to Import: Detected Cmd+Click may conflict with multi-cursor. Consider changing editor.multiCursorModifier to "altKey"');
+
+			// Show one-time notification with helpful tip
+			const hasShownTip = context.globalState.get('go-to-import.hasShownCmdClickTip', false);
+			if (!hasShownTip) {
+				vscode.window.showInformationMessage(
+					'Go to Import: If Cmd+Click creates multiple cursors instead of jumping to files, try changing "editor.multiCursorModifier" to "altKey" in settings, or use Cmd+Shift+G.',
+					'Open Settings',
+					'Don\'t show again'
+				).then(choice => {
+					if (choice === 'Open Settings') {
+						vscode.commands.executeCommand('workbench.action.openSettings', 'editor.multiCursorModifier');
+					}
+					context.globalState.update('go-to-import.hasShownCmdClickTip', true);
+				});
+			}
+		}
+	}
+
 	// Register workspace trust change handler
 	const trustChangeDisposable = vscode.workspace.onDidGrantWorkspaceTrust(() => {
 		vscode.window.showInformationMessage('Go to Import extension is now active in trusted workspace!');
@@ -394,6 +425,106 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	context.subscriptions.push(helloWorldDisposable);
+
+	// Register jump to import command
+	const jumpToImportDisposable = vscode.commands.registerCommand('go-to-import.jumpToImport', async () => {
+		const editor = vscode.window.activeTextEditor;
+		if (!editor) {
+			vscode.window.showWarningMessage('No active editor');
+			return;
+		}
+
+		const document = editor.document;
+		const position = editor.selection.active;
+		const linkProvider = new ImportLinkProvider();
+
+		// Get all document links
+		const links = await linkProvider.provideDocumentLinks(document, new vscode.CancellationTokenSource().token);
+		if (!links || links.length === 0) {
+			vscode.window.showInformationMessage('No import links found in this document');
+			return;
+		}
+
+		// Find link at cursor position
+		const linkAtPosition = links.find(link => link.range.contains(position));
+
+		if (linkAtPosition && linkAtPosition.target) {
+			// Open the target file
+			try {
+				const doc = await vscode.workspace.openTextDocument(linkAtPosition.target);
+				await vscode.window.showTextDocument(doc);
+			} catch (error) {
+				vscode.window.showErrorMessage(`Could not open file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+		} else {
+			// Show quick pick with all available imports
+			const items = links
+				.filter(link => link.target)
+				.map(link => ({
+					label: path.basename(link.target!.fsPath),
+					description: link.target!.fsPath,
+					detail: document.getText(link.range),
+					target: link.target!
+				}));
+
+			if (items.length === 0) {
+				vscode.window.showInformationMessage('No valid import links found');
+				return;
+			}
+
+			const selected = await vscode.window.showQuickPick(items, {
+				placeHolder: 'Select an import to jump to',
+				matchOnDescription: true,
+				matchOnDetail: true
+			});
+
+			if (selected) {
+				try {
+					const doc = await vscode.workspace.openTextDocument(selected.target);
+					await vscode.window.showTextDocument(doc);
+				} catch (error) {
+					vscode.window.showErrorMessage(`Could not open file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+				}
+			}
+		}
+	});
+
+	context.subscriptions.push(jumpToImportDisposable);
+
+	// Create status bar item for quick access
+	const goToImportConfig = vscode.workspace.getConfiguration('go-to-import');
+	const enableStatusBar = goToImportConfig.get('enableStatusBar', true);
+
+	if (enableStatusBar) {
+		const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+		statusBarItem.command = 'go-to-import.jumpToImport';
+		statusBarItem.text = '$(link) Go to Import';
+		statusBarItem.tooltip = 'Jump to Import File (Cmd+Shift+G)';
+
+		// Show status bar item only when in supported files
+		const updateStatusBar = () => {
+			const editor = vscode.window.activeTextEditor;
+			if (editor) {
+				const supportedLanguages = [
+					'javascript', 'typescript', 'javascriptreact', 'typescriptreact',
+					'python', 'css', 'scss', 'less', 'json', 'vue', 'svelte'
+				];
+				if (supportedLanguages.includes(editor.document.languageId)) {
+					statusBarItem.show();
+				} else {
+					statusBarItem.hide();
+				}
+			} else {
+				statusBarItem.hide();
+			}
+		};
+
+		// Update status bar when active editor changes
+		vscode.window.onDidChangeActiveTextEditor(updateStatusBar);
+		updateStatusBar(); // Initial update
+
+		context.subscriptions.push(statusBarItem);
+	}
 }
 
 /**

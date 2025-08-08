@@ -1,8 +1,8 @@
 {
   "name": "go-to-import",
   "displayName": "Go to Import",
-  "description": "Jump to files by clicking on import statement file names",
-  "version": "0.0.3",
+  "description": "Navigate to files instantly with multiple methods: click, keyboard shortcuts, context menu, and status bar",
+  "version": "0.0.4",
   "publisher": "luzmcosta",
   "repository": {
     "type": "git",
@@ -31,7 +31,56 @@
   },
   "activationEvents": [],
   "main": "./dist/extension.js",
-  "contributes": {},
+  "contributes": {
+    "commands": [
+      {
+        "command": "go-to-import.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "go-to-import.jumpToImport",
+        "title": "Jump to Import File"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Go to Import Configuration",
+      "properties": {
+        "go-to-import.enableStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Go to Import button in the status bar"
+        },
+        "go-to-import.showHelpNotification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show helpful notification about Cmd+Click conflicts on macOS"
+        },
+        "go-to-import.customKeybinding": {
+          "type": "string",
+          "default": "ctrl+shift+g",
+          "description": "Custom keybinding for jump to import command (requires VS Code restart)"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "go-to-import.jumpToImport",
+        "key": "ctrl+shift+g",
+        "mac": "cmd+shift+g",
+        "when": "editorTextFocus"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "go-to-import.jumpToImport",
+          "when": "editorTextFocus",
+          "group": "navigation@1"
+        }
+      ]
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "npm run check-types && npm run lint && node esbuild.js",

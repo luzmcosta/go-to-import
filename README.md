@@ -2,21 +2,42 @@
 
 **Navigate to files instantly by clicking on import paths!**
 
-Go to Import makes file paths in import statements clickable, allowing you to quickly navigate to referenced files with a simple Ctrl+Click (Cmd+Click on Mac).
+[![Version](https://img.shields.io/visual-studio-marketplace/v/luzmcosta.go-to-import)](https://marketplace.visualstudio.com/items?itemName=luzmcosta.go-to-import)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/luzmcosta.go-to-import)](https://marketplace.visualstudio.com/items?itemName=luzmcosta.go-to-import)
+[![Rating](https://img.shields.io/visual-studio-marketplace/r/luzmcosta.go-to-import)](https://marketplace.visualstudio.com/items?itemName=luzmcosta.go-to-import)
+
+Go to Import makes file paths in import statements clickable, allowing you to quickly navigate to referenced files with multiple convenient methods.
 
 ## ✨ Features
 
-- **One-click navigation** to imported files
-- **Multi-language support** for JavaScript, TypeScript, Python, CSS, and more
-- **Smart path resolution** for relative and absolute paths
-- **Automatic file extension detection**
-- **Works with popular frameworks** like React, Vue, Angular
+- **🖱️ One-click navigation** to imported files via Cmd+Click (configurable)
+- **⌨️ Keyboard shortcuts** for quick access (Cmd+Shift+G)
+- **📱 Multiple access methods** - context menu, status bar, command palette
+- **🌍 Multi-language support** for JavaScript, TypeScript, Python, CSS, and more
+- **🧠 Smart path resolution** for relative and absolute paths
+- **🔍 Automatic file extension detection**
+- **🎯 Framework-friendly** - works with React, Vue, Angular, and more
+- **🔒 Security-first** - comprehensive security measures built-in
 
-## 🚀 Usage
+## 🚀 Quick Start
 
+### Method 1: Click to Navigate
 1. Open any file containing import statements
-2. Hold **Ctrl** (or **Cmd** on Mac) and hover over a file path
+2. Hold **Cmd** (Mac) or **Ctrl** (Windows/Linux) and hover over a file path
 3. Click the highlighted path to jump directly to that file
+
+### Method 2: Keyboard Shortcut
+1. Place cursor on or near an import path
+2. Press **Cmd+Shift+G** (Mac) or **Ctrl+Shift+G** (Windows/Linux)
+3. If multiple imports exist, select from the quick-pick menu
+
+### Method 3: Context Menu
+1. Right-click on any import path
+2. Select "Jump to Import File" from the context menu
+
+### Method 4: Status Bar
+1. Look for the "🔗 Go to Import" button in the status bar (appears in supported files)
+2. Click to access jump functionality
 
 ## 📋 Supported Import Patterns
 
@@ -61,7 +82,57 @@ The extension intelligently resolves:
 - ✅ Index files in directories
 - ✅ Files without extensions
 
-## 🔒 Security
+## � Configuration
+
+This extension provides several configuration options to customize your experience:
+
+### Settings
+
+Open VS Code Settings (Cmd+, or Ctrl+,) and search for "go to import":
+
+- **`go-to-import.enableStatusBar`** (default: `true`)
+  - Show/hide the "Go to Import" button in the status bar
+
+- **`go-to-import.showHelpNotification`** (default: `true`)
+  - Show/hide the helpful notification about Cmd+Click conflicts on macOS
+
+### Custom Keybindings
+
+You can customize the keyboard shortcut for jumping to imports:
+
+1. Open Command Palette (Cmd+Shift+P / Ctrl+Shift+P)
+2. Search for "Preferences: Open Keyboard Shortcuts"
+3. Search for "Jump to Import File"
+4. Modify the keybinding to your preference
+
+**Default keybindings:**
+- macOS: `Cmd+Shift+G`
+- Windows/Linux: `Ctrl+Shift+G`
+
+### Customizing Click Behavior
+
+To change the Cmd+Click behavior system-wide:
+
+1. **Change Multi-Cursor Modifier (Recommended):**
+   ```json
+   {
+     "editor.multiCursorModifier": "altKey"
+   }
+   ```
+   This makes Alt+Click create multiple cursors and frees up Cmd+Click for links.
+
+2. **Custom Keybindings in keybindings.json:**
+   ```json
+   [
+     {
+       "key": "cmd+alt+g",
+       "command": "go-to-import.jumpToImport",
+       "when": "editorTextFocus"
+     }
+   ]
+   ```
+
+## �🔒 Security
 
 This extension implements comprehensive security measures:
 
@@ -79,96 +150,73 @@ For detailed security information, see [SECURITY.md](SECURITY.md).
 
 ## 📝 Release Notes
 
-### 0.0.1
+### 0.0.3 - Enhanced Navigation & Customization
+- **🔧 Multiple access methods** - Keyboard shortcuts, context menu, status bar
+- **⚙️ Configurable settings** - Customize status bar, notifications, and keybindings
+- **🍎 macOS optimization** - Smart detection and guidance for Cmd+Click conflicts
+- **🎯 Improved UX** - Platform-specific tooltips and one-time helpful notifications
+- **📱 Status bar integration** - Quick access button for supported file types
 
-- Initial release
+### 0.0.2 - Security & Stability
+- Enhanced security measures and path validation
+- Improved error handling and user feedback
+- Better workspace trust integration
+
+### 0.0.1 - Initial Release
 - Support for JavaScript/TypeScript imports
 - Support for Python imports
 - Support for CSS imports
 - Intelligent path resolution
 - Multi-language detection
 
-## 🐛 Known Issues
+## 🐛 Known Issues & Troubleshooting
+
+### Cmd-Click creates multiple cursors instead of jumping to file (macOS)
+
+If Cmd-Click is creating multiple cursors instead of jumping to the file, this is due to VS Code's multi-cursor modifier setting conflicting with the DocumentLinkProvider.
+
+**Solutions:**
+
+1. **Change the multi-cursor modifier (Recommended):**
+   - Open VS Code Settings (`Cmd+,`)
+   - Search for "multi cursor modifier"
+   - Change `editor.multiCursorModifier` from `commandKey` to `altKey`
+   - Now use Alt+Click for multi-cursor and Cmd+Click for jumping to files
+
+2. **Use alternative methods:**
+   - **Keyboard**: Press `Cmd+Shift+G`
+   - **Context menu**: Right-click on an import path → "Jump to Import File"
+   - **Status bar**: Click the "🔗 Go to Import" button
+   - **Command Palette**: `Cmd+Shift+P` → "Jump to Import File"
+
+3. **Use Ctrl+Click instead:**
+   - Hold `Ctrl+Click` instead of `Cmd+Click` to follow the link
+
+### Other Known Issues
 
 - Complex import patterns may not be detected
-- Node modules imports are not resolved (by design)
+- Node modules imports are not resolved (by design for security)
+- Very large files (>1MB) are skipped for performance
 
 ## 🤝 Contributing
 
-Found a bug or want to contribute? Please report issues or submit pull requests.
+We welcome contributions! Here's how you can help:
+
+- 🐛 **Report bugs** - [Create an issue](https://github.com/luzmcosta/go-to-import/issues)
+- 💡 **Suggest features** - [Start a discussion](https://github.com/luzmcosta/go-to-import/discussions)
+- 🔧 **Submit pull requests** - See our [contribution guidelines](.github/CONTRIBUTING.md)
+- ⭐ **Star the repo** if you find it useful!
 
 ## 📄 License
 
-This extension is licensed under the MIT License.
+This extension is licensed under the [MIT License](LICENSE).
 
-## README
+## 🙏 Acknowledgments
 
-This is the README for your extension. After writing up a brief description, we recommend including the following sections.
-
-## Features
-
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
-
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
-
-## Extension Settings
-
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
-This extension contributes the following settings:
-
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
-
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+- Built with ❤️ using the [VS Code Extension API](https://code.visualstudio.com/api)
+- Inspired by the need for faster navigation in modern development workflows
+- Thanks to all contributors and users who provide feedback!
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**Enjoying Go to Import?** [Leave a review](https://marketplace.visualstudio.com/items?itemName=luzmcosta.go-to-import&ssr=false#review-details) and help others discover it! ⭐
