@@ -41,10 +41,10 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	 */
 	private readonly MAX_TRAVERSAL_DEPTH = 10;
 
-	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	provideDocumentLinks(
 		document: vscode.TextDocument,
-		token: vscode.CancellationToken
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_token: vscode.CancellationToken
 	): vscode.ProviderResult<vscode.DocumentLink[]> {
 		// Security check: Only operate on trusted workspaces
 		if (!vscode.workspace.isTrusted) {
@@ -331,7 +331,6 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 
 			const stat = fs.statSync(filePath);
 			return stat.isFile();
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		} catch (error) {
 			// Don't log ENOENT errors as they're expected, but log others for debugging
 			if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') {
@@ -353,7 +352,6 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 
 			const stat = fs.statSync(dirPath);
 			return stat.isDirectory();
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		} catch (error) {
 			// Don't log ENOENT errors as they're expected, but log others for debugging
 			if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') {
