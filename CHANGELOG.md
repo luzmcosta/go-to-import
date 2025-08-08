@@ -58,7 +58,12 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 - Validates workspace boundaries for all file access
 - Implements proper error handling without information disclosure
 
-## [0.0.2] - Previous Release
+## [0.0.2] - Initial Release
+
+### Changed
+- Updated package version
+
+## [0.0.1] - Initial Release
 
 ### Added
 - Initial release
