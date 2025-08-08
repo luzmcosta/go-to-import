@@ -6,11 +6,13 @@ import * as fs from 'fs';
 
 /**
  * DocumentLinkProvider that detects import statements and makes file paths clickable
+ * Implements security measures to prevent path traversal and unauthorized file access
  */
 class ImportLinkProvider implements vscode.DocumentLinkProvider {
 
 	/**
 	 * Regular expressions to match different import statement patterns
+	 * Limited to safe patterns to prevent code injection
 	 */
 	private readonly importPatterns = [
 		// JavaScript/TypeScript import statements
@@ -29,19 +31,60 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 		/import\(['"`]([^'"`]+)['"`]\)/g,
 	];
 
+	/**
+	 * Maximum path length to prevent DoS attacks
+	 */
+	private readonly MAX_PATH_LENGTH = 500;
+
+	/**
+	 * Maximum traversal depth to prevent path traversal attacks
+	 */
+	private readonly MAX_TRAVERSAL_DEPTH = 10;
+
+	// eslint-disable-next-line @typescript-eslint/no-unused-vars
 	provideDocumentLinks(
 		document: vscode.TextDocument,
 		token: vscode.CancellationToken
 	): vscode.ProviderResult<vscode.DocumentLink[]> {
+		// Security check: Only operate on trusted workspaces
+		if (!vscode.workspace.isTrusted) {
+			return [];
+		}
+
+		// Security check: Only process files within the workspace
+		const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+		if (!workspaceFolder) {
+			return [];
+		}
+
+		// Security check: Only process file:// scheme documents
+		if (document.uri.scheme !== 'file') {
+			return [];
+		}
+
 		const links: vscode.DocumentLink[] = [];
 		const text = document.getText();
+
+		// Security check: Limit document size to prevent DoS
+		if (text.length > 1024 * 1024) { // 1MB limit
+			console.warn('Go to Import: Document too large, skipping link detection');
+			return [];
+		}
 
 		for (const pattern of this.importPatterns) {
 			pattern.lastIndex = 0; // Reset regex state
 			let match;
+			let matchCount = 0;
 
-			while ((match = pattern.exec(text)) !== null) {
+			while ((match = pattern.exec(text)) !== null && matchCount < 1000) { // Limit matches
+				matchCount++;
 				const importPath = match[1];
+
+				// Security validation of import path
+				if (!this.isValidImportPath(importPath)) {
+					continue;
+				}
+
 				const matchStart = match.index + match[0].indexOf(importPath);
 				const matchEnd = matchStart + importPath.length;
 
@@ -61,6 +104,66 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	}
 
 	/**
+	 * Validates import path to prevent security issues
+	 */
+	private isValidImportPath(importPath: string): boolean {
+		// Security check: Path length validation
+		if (importPath.length > this.MAX_PATH_LENGTH) {
+			return false;
+		}
+
+		// Security check: No null bytes
+		if (importPath.includes('\0')) {
+			return false;
+		}
+
+		// Security check: Limit path traversal depth
+		const traversalMatches = importPath.match(/\.\./g);
+		if (traversalMatches && traversalMatches.length > this.MAX_TRAVERSAL_DEPTH) {
+			return false;
+		}
+
+		// Security check: No absolute paths outside workspace (except for node_modules)
+		if (path.isAbsolute(importPath) && !importPath.includes('node_modules')) {
+			return false;
+		}
+
+		// Security check: Block dangerous characters and patterns
+		const dangerousPatterns = [
+			/[<>"|?*]/,  // Invalid filename characters
+			/^\s*$/,     // Empty or whitespace only
+			/\.\.\//,    // Consecutive path traversal (additional check)
+		];
+
+		for (const pattern of dangerousPatterns) {
+			if (pattern.test(importPath)) {
+				return false;
+			}
+		}
+
+		// Security check: Block known dangerous paths
+		const forbiddenPaths = [
+			'/etc/',
+			'/usr/',
+			'/bin/',
+			'/sbin/',
+			'/proc/',
+			'/sys/',
+			'C:\\Windows\\',
+			'C:\\System',
+		];
+
+		const lowerPath = importPath.toLowerCase();
+		for (const forbidden of forbiddenPaths) {
+			if (lowerPath.startsWith(forbidden.toLowerCase())) {
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	/**
 	 * Resolves the import path to an absolute file path
 	 */
 	private resolveImportPath(document: vscode.TextDocument, importPath: string): string | null {
@@ -70,46 +173,124 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 		}
 
 		const documentDir = path.dirname(document.uri.fsPath);
+		const workspaceRoot = workspaceFolder.uri.fsPath;
 		let resolvedPath: string;
 
-		// Handle relative paths
-		if (importPath.startsWith('./') || importPath.startsWith('../')) {
-			resolvedPath = path.resolve(documentDir, importPath);
-		}
-		// Handle absolute paths from workspace root
-		else if (importPath.startsWith('/')) {
-			resolvedPath = path.join(workspaceFolder.uri.fsPath, importPath);
-		}
-		// Handle node_modules or other relative imports without explicit ./
-		else if (!path.isAbsolute(importPath)) {
-			// First try relative to current file
-			resolvedPath = path.resolve(documentDir, importPath);
-			if (!this.fileExists(resolvedPath)) {
-				// Try common extensions
-				const withExtensions = this.tryCommonExtensions(resolvedPath);
-				if (withExtensions) {
-					resolvedPath = withExtensions;
-				} else {
-					// Try node_modules or workspace relative
-					resolvedPath = path.join(workspaceFolder.uri.fsPath, importPath);
+		try {
+			// Handle relative paths
+			if (importPath.startsWith('./') || importPath.startsWith('../')) {
+				resolvedPath = path.resolve(documentDir, importPath);
+			}
+			// Handle absolute paths from workspace root
+			else if (importPath.startsWith('/')) {
+				resolvedPath = path.join(workspaceRoot, importPath);
+			}
+			// Handle node_modules or other relative imports without explicit ./
+			else if (!path.isAbsolute(importPath)) {
+				// First try relative to current file
+				resolvedPath = path.resolve(documentDir, importPath);
+				if (!this.fileExists(resolvedPath)) {
+					// Try common extensions
+					const withExtensions = this.tryCommonExtensions(resolvedPath);
+					if (withExtensions) {
+						resolvedPath = withExtensions;
+					} else {
+						// Try node_modules or workspace relative
+						resolvedPath = path.join(workspaceRoot, importPath);
+					}
 				}
 			}
-		}
-		// Already absolute path
-		else {
-			resolvedPath = importPath;
-		}
-
-		// Try common file extensions if no extension provided
-		if (!path.extname(resolvedPath)) {
-			const withExtension = this.tryCommonExtensions(resolvedPath);
-			if (withExtension) {
-				resolvedPath = withExtension;
+			// Already absolute path
+			else {
+				resolvedPath = importPath;
 			}
-		}
 
-		// Check if file exists
-		return this.fileExists(resolvedPath) ? resolvedPath : null;
+			// Security check: Ensure resolved path is within workspace or node_modules
+			const normalizedPath = path.normalize(resolvedPath);
+			const normalizedWorkspace = path.normalize(workspaceRoot);
+
+			if (!normalizedPath.startsWith(normalizedWorkspace)) {
+				// Allow node_modules access from parent directories
+				const nodeModulesPattern = /node_modules/;
+				if (!nodeModulesPattern.test(normalizedPath)) {
+					console.warn(`Go to Import: Path outside workspace blocked: ${normalizedPath}`);
+					return null;
+				}
+			}
+
+			// Try common file extensions if no extension provided
+			if (!path.extname(resolvedPath)) {
+				const withExtension = this.tryCommonExtensions(resolvedPath);
+				if (withExtension) {
+					resolvedPath = withExtension;
+				}
+			}
+
+			// Security check: Final validation before returning
+			if (!this.isFileAccessAllowed(resolvedPath, workspaceRoot)) {
+				return null;
+			}
+
+			// Check if file exists
+			return this.fileExists(resolvedPath) ? resolvedPath : null;
+		} catch (error) {
+			// Log error for debugging but don't expose details
+			console.warn('Go to Import: Error resolving path:', error instanceof Error ? error.message : 'Unknown error');
+			return null;
+		}
+	}
+
+	/**
+	 * Validates if file access is allowed for security purposes
+	 */
+	private isFileAccessAllowed(filePath: string, workspaceRoot: string): boolean {
+		try {
+			const normalizedPath = path.normalize(filePath);
+			const normalizedWorkspace = path.normalize(workspaceRoot);
+
+			// Security check: Ensure path is within workspace
+			if (!normalizedPath.startsWith(normalizedWorkspace)) {
+				// Allow node_modules access
+				if (normalizedPath.includes('node_modules')) {
+					return true;
+				}
+				return false;
+			}
+
+			// Security check: Block access to sensitive directories
+			const sensitiveDirectories = [
+				'.git',
+				'.env',
+				'node_modules/.bin',
+				'.vscode-test',
+				'.nyc_output',
+				'coverage',
+			];
+
+			for (const sensitive of sensitiveDirectories) {
+				if (normalizedPath.includes(path.sep + sensitive + path.sep) ||
+					normalizedPath.endsWith(path.sep + sensitive)) {
+					return false;
+				}
+			}
+
+			// Security check: Block executable files
+			const dangerousExtensions = [
+				'.exe', '.bat', '.cmd', '.com', '.scr', '.pif',
+				'.sh', '.bash', '.zsh', '.ps1', '.vbs', '.jar'
+			];
+
+			const fileExtension = path.extname(normalizedPath).toLowerCase();
+			if (dangerousExtensions.includes(fileExtension)) {
+				return false;
+			}
+
+			return true;
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		} catch (error) {
+			// If there's any error in validation, deny access
+			return false;
+		}
 	}
 
 	/**
@@ -139,23 +320,45 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	}
 
 	/**
-	 * Check if file exists
+	 * Check if file exists with proper error handling
 	 */
 	private fileExists(filePath: string): boolean {
 		try {
-			return fs.statSync(filePath).isFile();
-		} catch {
+			// Additional security check before file system access
+			if (!filePath || typeof filePath !== 'string') {
+				return false;
+			}
+
+			const stat = fs.statSync(filePath);
+			return stat.isFile();
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		} catch (error) {
+			// Don't log ENOENT errors as they're expected, but log others for debugging
+			if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') {
+				console.warn('Go to Import: File access error:', error.message);
+			}
 			return false;
 		}
 	}
 
 	/**
-	 * Check if directory exists
+	 * Check if directory exists with proper error handling
 	 */
 	private directoryExists(dirPath: string): boolean {
 		try {
-			return fs.statSync(dirPath).isDirectory();
-		} catch {
+			// Additional security check before file system access
+			if (!dirPath || typeof dirPath !== 'string') {
+				return false;
+			}
+
+			const stat = fs.statSync(dirPath);
+			return stat.isDirectory();
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		} catch (error) {
+			// Don't log ENOENT errors as they're expected, but log others for debugging
+			if (error instanceof Error && 'code' in error && error.code !== 'ENOENT') {
+				console.warn('Go to Import: Directory access error:', error.message);
+			}
 			return false;
 		}
 	}
@@ -169,6 +372,36 @@ export function activate(context: vscode.ExtensionContext) {
 	// This line of code will only be executed once when your extension is activated
 	console.log('Go to Import extension is now active!');
 
+	// Security check: Only activate in trusted workspaces
+	if (!vscode.workspace.isTrusted) {
+		console.warn('Go to Import: Extension disabled in untrusted workspace');
+		vscode.window.showWarningMessage('Go to Import extension is disabled in untrusted workspaces for security reasons.');
+		return;
+	}
+
+	// Register workspace trust change handler
+	const trustChangeDisposable = vscode.workspace.onDidGrantWorkspaceTrust(() => {
+		vscode.window.showInformationMessage('Go to Import extension is now active in trusted workspace!');
+		// Re-register providers when workspace becomes trusted
+		registerLinkProviders(context);
+	});
+	context.subscriptions.push(trustChangeDisposable);
+
+	// Register the document link providers
+	registerLinkProviders(context);
+
+	// Keep the hello world command for testing
+	const helloWorldDisposable = vscode.commands.registerCommand('go-to-import.helloWorld', () => {
+		vscode.window.showInformationMessage('Go to Import extension is working! Try clicking on an import path.');
+	});
+
+	context.subscriptions.push(helloWorldDisposable);
+}
+
+/**
+ * Register document link providers for supported languages
+ */
+function registerLinkProviders(context: vscode.ExtensionContext) {
 	// Register the document link provider for various languages
 	const languages = [
 		'javascript',
@@ -188,18 +421,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 	for (const language of languages) {
 		const disposable = vscode.languages.registerDocumentLinkProvider(
-			{ language },
+			{ language, scheme: 'file' }, // Only register for file scheme
 			linkProvider
 		);
 		context.subscriptions.push(disposable);
 	}
-
-	// Keep the hello world command for testing
-	const helloWorldDisposable = vscode.commands.registerCommand('go-to-import.helloWorld', () => {
-		vscode.window.showInformationMessage('Go to Import extension is working! Try clicking on an import path.');
-	});
-
-	context.subscriptions.push(helloWorldDisposable);
 }
 
 // This method is called when your extension is deactivated

@@ -61,6 +61,17 @@ The extension intelligently resolves:
 - ✅ Index files in directories
 - ✅ Files without extensions
 
+## 🔒 Security
+
+This extension implements comprehensive security measures:
+
+- **Workspace Trust**: Only operates in trusted workspaces
+- **Path Validation**: Prevents path traversal and validates file access
+- **File Type Restrictions**: Blocks access to executable and sensitive files
+- **Boundary Enforcement**: Restricts access to workspace files only
+
+For detailed security information, see [SECURITY.md](SECURITY.md).
+
 ## 🎯 Requirements
 
 - Visual Studio Code 1.74.0 or higher

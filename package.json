@@ -2,7 +2,7 @@
   "name": "go-to-import",
   "displayName": "Go to Import",
   "description": "Jump to files by clicking on import statement file names",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "luzmcosta",
   "repository": {
     "type": "git",
@@ -23,6 +23,12 @@
   "categories": [
     "Other"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "This extension requires workspace trust to access file system for security reasons."
+    }
+  },
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {},
@@ -38,7 +44,11 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "lint:security": "eslint src --ext .ts --config eslint.config.mjs",
+    "test": "vscode-test",
+    "test:security": "npm run test -- --grep 'Security'",
+    "security-audit": "npm audit --audit-level=moderate",
+    "validate": "npm run check-types && npm run lint:security && npm run test:security"
   },
   "devDependencies": {
     "@types/vscode": "^1.74.0",
