@@ -12,22 +12,27 @@
 import React from 'react';
 import { useState } from 'react';
 import './styles.css';
-import utils from '../utils/helpers';
+import './base.css';
+import utils from './utils/helpers';
 import config from './config.json';
 
-// Relative imports
+// Relative imports - mixing JSX and TSX files
 import { Button } from './components/Button';
-import Modal from './components/Modal.tsx';
+import Modal from './components/Modal';
+
+// Try importing the TypeScript demo file
+// import TSXDemo from './test-file.tsx';
 
 // Dynamic imports
-const dynamicModule = import('./dynamic-module');
+const dynamicModule = import('./utils/helpers');
 
-// CommonJS requires
+// CommonJS requires (for demonstration)
 const fs = require('fs');
 const path = require('path');
 
 export default function App() {
     const [count, setCount] = useState(0);
+    const [showModal, setShowModal] = useState(false);
 
     // Using imports to avoid lint warnings
     console.log('Config:', config);
@@ -36,15 +41,59 @@ export default function App() {
     console.log('Path module:', typeof path);
     console.log('Dynamic module promise:', dynamicModule);
 
+    const toggleModal = () => setShowModal(!showModal);
+
     return (
-        <div>
-            <h1>Testing Go to Import Extension</h1>
-            <p>Click on any import path above to jump to that file!</p>
-            <p>Current count: {count}</p>
-            <button onClick={() => setCount(count + 1)}>
-                Increment ({Button ? 'Button component available' : 'No Button'})
-            </button>
-            {Modal && <Modal title="Demo" />}
+        <div className="app-container">
+            <header>
+                <h1>Testing Go to Import Extension</h1>
+                <p className="subtitle">Click on any import path above to jump to that file!</p>
+            </header>
+
+            <main>
+                <section className="counter-section">
+                    <p>Current count: <strong>{count}</strong></p>
+                    <Button onClick={() => setCount(count + 1)}>
+                        Increment ({Button ? 'Button component available' : 'No Button'})
+                    </Button>
+                </section>
+
+                <section className="modal-section">
+                    <h2>Modal Demo (TSX Component)</h2>
+                    <Button onClick={toggleModal}>
+                        {showModal ? 'Hide TSX Modal' : 'Show TSX Modal'}
+                    </Button>
+
+                    {showModal && (
+                        <Modal
+                            title="Demo Modal from TSX"
+                            modalType="info"
+                            onClose={toggleModal}
+                        >
+                            <div>
+                                <p>🎉 This modal is imported from <code>Modal.tsx</code>!</p>
+                                <p>It demonstrates importing and using TypeScript React components in JavaScript files.</p>
+                                <p>The modal includes TypeScript interfaces, type checking, and imported utilities.</p>
+                            </div>
+                        </Modal>
+                    )}
+                </section>
+
+                <section className="import-examples">
+                    <h2>Import Types Demonstrated</h2>
+                    <ul>
+                        <li>✅ React imports (default and named)</li>
+                        <li>✅ CSS imports (./styles.css, ./base.css)</li>
+                        <li>✅ JSON imports (./config.json)</li>
+                        <li>✅ JavaScript modules (./utils/helpers)</li>
+                        <li>✅ JSX components (./components/Button)</li>
+                        <li>✅ TSX components (./components/Modal.tsx)</li>
+                        <li>✅ Dynamic imports (import('./utils/helpers'))</li>
+                        <li>✅ CommonJS requires (fs, path)</li>
+                        <li>🔗 Try clicking on any import path to navigate!</li>
+                    </ul>
+                </section>
+            </main>
         </div>
     );
 }
