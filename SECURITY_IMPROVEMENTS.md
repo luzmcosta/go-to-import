@@ -51,7 +51,7 @@ This document summarizes the comprehensive security improvements made to the Go 
 ### 8. Enhanced ESLint Configuration ✅
 - **Security-focused Rules**: `no-eval`, `no-implied-eval`, `no-new-func`
 - **Type Safety**: `@typescript-eslint/no-explicit-any`
-- **Location**: `eslint.config.mjs`
+- **Location**: `eslint.config.js`
 
 ### 9. Security Scripts ✅
 - **Security Linting**: `npm run lint:security`
@@ -93,7 +93,7 @@ This document summarizes the comprehensive security improvements made to the Go 
 
 ### Configuration Files
 - `package.json` - Capabilities and scripts
-- `eslint.config.mjs` - Security rules
+- `eslint.config.js` - Security rules
 - `tsconfig.json` - Type safety
 
 ### Documentation
