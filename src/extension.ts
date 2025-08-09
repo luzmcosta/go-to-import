@@ -2,7 +2,7 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
+import { promises as fsPromises } from 'fs';
 
 /**
  * DocumentLinkProvider that detects import statements and makes file paths clickable
@@ -41,11 +41,11 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	 */
 	private readonly MAX_TRAVERSAL_DEPTH = 10;
 
-	provideDocumentLinks(
+	async provideDocumentLinks(
 		document: vscode.TextDocument,
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		_token: vscode.CancellationToken
-	): vscode.ProviderResult<vscode.DocumentLink[]> {
+	): Promise<vscode.DocumentLink[]> {
 		// Security check: Only operate on trusted workspaces
 		if (!vscode.workspace.isTrusted) {
 			return [];
@@ -92,7 +92,7 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 				const endPos = document.positionAt(matchEnd);
 				const range = new vscode.Range(startPos, endPos);
 
-				const resolvedPath = this.resolveImportPath(document, importPath);
+				const resolvedPath = await this.resolveImportPath(document, importPath);
 				if (resolvedPath) {
 					const link = new vscode.DocumentLink(range, vscode.Uri.file(resolvedPath));
 					// Add tooltip with platform-specific instructions
@@ -170,7 +170,7 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	/**
 	 * Resolves the import path to an absolute file path
 	 */
-	private resolveImportPath(document: vscode.TextDocument, importPath: string): string | null {
+	private async resolveImportPath(document: vscode.TextDocument, importPath: string): Promise<string | null> {
 		const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
 		if (!workspaceFolder) {
 			return null;
@@ -193,9 +193,9 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 			else if (!path.isAbsolute(importPath)) {
 				// First try relative to current file
 				resolvedPath = path.resolve(documentDir, importPath);
-				if (!this.fileExists(resolvedPath)) {
+				if (!(await this.fileExists(resolvedPath))) {
 					// Try common extensions
-					const withExtensions = this.tryCommonExtensions(resolvedPath);
+					const withExtensions = await this.tryCommonExtensions(resolvedPath);
 					if (withExtensions) {
 						resolvedPath = withExtensions;
 					} else {
@@ -224,7 +224,7 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 
 			// Try common file extensions if no extension provided
 			if (!path.extname(resolvedPath)) {
-				const withExtension = this.tryCommonExtensions(resolvedPath);
+				const withExtension = await this.tryCommonExtensions(resolvedPath);
 				if (withExtension) {
 					resolvedPath = withExtension;
 				}
@@ -236,7 +236,7 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 			}
 
 			// Check if file exists
-			return this.fileExists(resolvedPath) ? resolvedPath : null;
+			return (await this.fileExists(resolvedPath)) ? resolvedPath : null;
 		} catch (error) {
 			// Log error for debugging but don't expose details
 			console.warn('Go to Import: Error resolving path:', error instanceof Error ? error.message : 'Unknown error');
@@ -300,21 +300,21 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	/**
 	 * Try common file extensions for the given path
 	 */
-	private tryCommonExtensions(basePath: string): string | null {
+	private async tryCommonExtensions(basePath: string): Promise<string | null> {
 		const extensions = ['.ts', '.js', '.tsx', '.jsx', '.py', '.css', '.scss', '.less', '.json'];
 
 		for (const ext of extensions) {
 			const pathWithExt = basePath + ext;
-			if (this.fileExists(pathWithExt)) {
+			if (await this.fileExists(pathWithExt)) {
 				return pathWithExt;
 			}
 		}
 
 		// Try index files in directories
-		if (this.directoryExists(basePath)) {
+		if (await this.directoryExists(basePath)) {
 			for (const ext of extensions) {
 				const indexPath = path.join(basePath, 'index' + ext);
-				if (this.fileExists(indexPath)) {
+				if (await this.fileExists(indexPath)) {
 					return indexPath;
 				}
 			}
@@ -326,14 +326,14 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	/**
 	 * Check if file exists with proper error handling
 	 */
-	private fileExists(filePath: string): boolean {
+	private async fileExists(filePath: string): Promise<boolean> {
 		try {
 			// Additional security check before file system access
 			if (!filePath || typeof filePath !== 'string') {
 				return false;
 			}
 
-			const stat = fs.statSync(filePath);
+			const stat = await fsPromises.stat(filePath);
 			return stat.isFile();
 		} catch (error) {
 			// Don't log ENOENT errors as they're expected, but log others for debugging
@@ -347,14 +347,14 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	/**
 	 * Check if directory exists with proper error handling
 	 */
-	private directoryExists(dirPath: string): boolean {
+	private async directoryExists(dirPath: string): Promise<boolean> {
 		try {
 			// Additional security check before file system access
 			if (!dirPath || typeof dirPath !== 'string') {
 				return false;
 			}
 
-			const stat = fs.statSync(dirPath);
+			const stat = await fsPromises.stat(dirPath);
 			return stat.isDirectory();
 		} catch (error) {
 			// Don't log ENOENT errors as they're expected, but log others for debugging
@@ -368,7 +368,7 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 
 // This method is called when your extension is activated
 // Your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
 
 	// Use the console to output diagnostic information (console.log) and errors (console.error)
 	// This line of code will only be executed once when your extension is activated
