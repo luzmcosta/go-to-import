@@ -8,10 +8,22 @@
 
 Go to Import makes file paths in import statements clickable, allowing you to quickly navigate to referenced files with multiple convenient methods.
 
+## ⚙️ Configuration
+
+Customize your experience with the following configuration options:
+
+
+- **`go-to-import.enableStatusBar`** (default: `true`)
+  - Show/hide the "Go to Import" button in the status bar.
+
+- **`go-to-import.showHelpNotification`** (default: `true`)
+  - Show/hide the helpful notification about `Cmd+Click` conflicts on macOS.
+
+
 ## ✨ Features
 
-- **🖱️ One-click navigation** to imported files via Cmd+Click (configurable)
-- **⌨️ Keyboard shortcuts** for quick access (Cmd+Shift+G)
+- **🖱️ One-click navigation** to imported files via `Cmd+Click` (configurable)
+- **⌨️ Keyboard shortcuts** for quick access (`Cmd+Shift+G`)
 - **📱 Multiple access methods** - context menu, status bar, command palette
 - **🌍 Multi-language support** for JavaScript, TypeScript, Python, CSS, and more
 - **🧠 Smart path resolution** for relative and absolute paths
@@ -39,6 +51,70 @@ Go to Import makes file paths in import statements clickable, allowing you to qu
 1. Look for the "🔗 Go to Import" button in the status bar (appears in supported files)
 2. Click to access jump functionality
 
+## Customizing Keybindings
+
+You can customize the keyboard shortcut for jumping to imports:
+
+```json
+{
+  "key": "cmd+alt+g",
+  "command": "go-to-import.jumpToImport",
+  "when": "editorTextFocus"
+}
+```
+
+1. Open Command Palette (Cmd+Shift+P / Ctrl+Shift+P)
+2. Search for "Preferences: Open Keyboard Shortcuts"
+3. Search for "Jump to Import File"
+4. Modify the keybinding to your preference
+
+**Default keybindings:**
+- macOS: `Cmd+Shift+G`
+- Windows/Linux: `Ctrl+Shift+G`
+
+## Customizing Click Behavior
+
+To change the Cmd+Click behavior system-wide:
+
+1. **Change Multi-Cursor Modifier (Recommended):**
+   ```json
+   {
+     "editor.multiCursorModifier": "altKey"
+   }
+   ```
+   This makes `Alt+Click` create multiple cursors and frees up `Cmd+Click` for links.
+
+2. **Custom Keybindings in keybindings.json:**
+   ```json
+   [
+     {
+       "key": "cmd+alt+g",
+       "command": "go-to-import.jumpToImport",
+       "when": "editorTextFocus"
+     }
+   ]
+   ```
+
+## 📁 Supported Path Types
+
+The extension intelligently resolves:
+
+- ✅ Relative paths (`./`, `../`)
+- ✅ Absolute paths from workspace root
+- ✅ Common file extensions automatically
+- ✅ Index files in directories
+- ✅ Files without extensions
+
+## 🔧 Supported File Types
+
+- JavaScript (`.js`, `.jsx`)
+- TypeScript (`.ts`, `.tsx`)
+- Python (`.py`)
+- CSS/SCSS/LESS (`.css`, `.scss`, `.less`)
+- JSON (`.json`)
+- Vue (`.vue`)
+- Svelte (`.svelte`)
+
 ## 📋 Supported Import Patterns
 
 ### JavaScript/TypeScript
@@ -63,76 +139,9 @@ from .local import module
 @import '../fonts/fonts.scss';
 ```
 
-## 🔧 Supported File Types
+---
 
-- JavaScript (`.js`, `.jsx`)
-- TypeScript (`.ts`, `.tsx`)
-- Python (`.py`)
-- CSS/SCSS/LESS (`.css`, `.scss`, `.less`)
-- JSON (`.json`)
-- Vue (`.vue`)
-- Svelte (`.svelte`)
-
-## 📁 Path Resolution
-
-The extension intelligently resolves:
-- ✅ Relative paths (`./`, `../`)
-- ✅ Absolute paths from workspace root
-- ✅ Common file extensions automatically
-- ✅ Index files in directories
-- ✅ Files without extensions
-
-## � Configuration
-
-This extension provides several configuration options to customize your experience:
-
-### Settings
-
-Open VS Code Settings (Cmd+, or Ctrl+,) and search for "go to import":
-
-- **`go-to-import.enableStatusBar`** (default: `true`)
-  - Show/hide the "Go to Import" button in the status bar
-
-- **`go-to-import.showHelpNotification`** (default: `true`)
-  - Show/hide the helpful notification about Cmd+Click conflicts on macOS
-
-### Custom Keybindings
-
-You can customize the keyboard shortcut for jumping to imports:
-
-1. Open Command Palette (Cmd+Shift+P / Ctrl+Shift+P)
-2. Search for "Preferences: Open Keyboard Shortcuts"
-3. Search for "Jump to Import File"
-4. Modify the keybinding to your preference
-
-**Default keybindings:**
-- macOS: `Cmd+Shift+G`
-- Windows/Linux: `Ctrl+Shift+G`
-
-### Customizing Click Behavior
-
-To change the Cmd+Click behavior system-wide:
-
-1. **Change Multi-Cursor Modifier (Recommended):**
-   ```json
-   {
-     "editor.multiCursorModifier": "altKey"
-   }
-   ```
-   This makes Alt+Click create multiple cursors and frees up Cmd+Click for links.
-
-2. **Custom Keybindings in keybindings.json:**
-   ```json
-   [
-     {
-       "key": "cmd+alt+g",
-       "command": "go-to-import.jumpToImport",
-       "when": "editorTextFocus"
-     }
-   ]
-   ```
-
-## �🔒 Security
+## 🔒 Security
 
 This extension implements comprehensive security measures:
 
@@ -150,30 +159,15 @@ For detailed security information, see [SECURITY.md](SECURITY.md).
 
 ## 📝 Release Notes
 
-### 0.0.3 - Enhanced Navigation & Customization
-- **🔧 Multiple access methods** - Keyboard shortcuts, context menu, status bar
-- **⚙️ Configurable settings** - Customize status bar, notifications, and keybindings
-- **🍎 macOS optimization** - Smart detection and guidance for Cmd+Click conflicts
-- **🎯 Improved UX** - Platform-specific tooltips and one-time helpful notifications
-- **📱 Status bar integration** - Quick access button for supported file types
-
-### 0.0.2 - Security & Stability
-- Enhanced security measures and path validation
-- Improved error handling and user feedback
-- Better workspace trust integration
-
-### 0.0.1 - Initial Release
-- Support for JavaScript/TypeScript imports
-- Support for Python imports
-- Support for CSS imports
-- Intelligent path resolution
-- Multi-language detection
+See [CHANGELOG.md](CHANGELOG.md)
 
 ## 🐛 Known Issues & Troubleshooting
 
 ### Cmd-Click creates multiple cursors instead of jumping to file (macOS)
 
-If Cmd-Click is creating multiple cursors instead of jumping to the file, this is due to VS Code's multi-cursor modifier setting conflicting with the DocumentLinkProvider.
+If the `Cmd+Click` event is creating multiple cursors instead of
+jumping to the file, this is due to VS Code's multi-cursor
+modifier setting conflicting with the DocumentLinkProvider.
 
 **Solutions:**
 
@@ -192,7 +186,7 @@ If Cmd-Click is creating multiple cursors instead of jumping to the file, this i
 3. **Use Ctrl+Click instead:**
    - Hold `Ctrl+Click` instead of `Cmd+Click` to follow the link
 
-### Other Known Issues
+### Potential Issues
 
 - Complex import patterns may not be detected
 - Node modules imports are not resolved (by design for security)
