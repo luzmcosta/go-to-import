@@ -1,5 +1,4 @@
 import * as assert from 'assert';
-import * as vscode from 'vscode';
 import * as path from 'path';
 
 // Import the extension module for testing
@@ -7,7 +6,7 @@ import * as path from 'path';
 // import * as myExtension from '../../extension';
 
 suite('Extension Test Suite', () => {
-	vscode.window.showInformationMessage('Start all tests.');
+	// Removed vscode.window.showInformationMessage to prevent hanging in headless test environment
 
 	test('Sample test', () => {
 		assert.strictEqual(-1, [1, 2, 3].indexOf(5));
