@@ -3,7 +3,7 @@
   "type": "module",
   "displayName": "Go to Import",
   "description": "Navigate to files instantly with multiple methods: click, keyboard shortcuts, context menu, and status bar",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "luzmcosta",
   "repository": {
     "type": "git",

@@ -33,6 +33,9 @@ Customize your experience with the following configuration options:
 
 ## 🚀 Quick Start
 
+### Testing the Extension
+Try the extension with the comprehensive examples in the `example/` directory, which includes JavaScript, TypeScript, Python, and CSS files demonstrating various import patterns.
+
 ### Method 1: Click to Navigate
 1. Open any file containing import statements
 2. Hold **Cmd** (Mac) or **Ctrl** (Windows/Linux) and hover over a file path

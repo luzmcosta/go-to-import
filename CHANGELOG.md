@@ -2,7 +2,26 @@
 
 All notable changes to the "go-to-import" extension will be documented in this file.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## [0.0.5] - 2025-08-08 - ES Module Support & Enhanced Examples
+
+### Added
+- **Examples**: Comprehensive multi-language example files in `example/` directory
+  - Extended JavaScript/JSX examples with implicit file extensions
+  - TypeScript/TSX examples with type-safe imports and interfaces
+  - Python examples with relative imports and package structure
+  - CSS/SCSS examples with @import statements
+  - Comprehensive README with testing instructions for all examples
+- **Development**: ES module support via `package.json` `"type": "module"`
+- **Build**: Updated build configuration for improved module resolution
+
+### Changed
+- **Documentation**: Restructured README with improved clarity and organization
+- **Configuration**: Renamed `eslint.config.mjs` to `eslint.config.js`
+- **Build**: Updated TypeScript configuration for better type safety
+- **Build**: Switched to ES module import syntax in build scripts
+
+### Removed
+- **Documentation**: Redundant information in README sections
 
 ## [0.0.4] - 2025-08-08 - Enhanced Navigation & Customization
 
