@@ -26,8 +26,18 @@ Customize your experience with the following configuration options:
 - **⌨️ Keyboard shortcuts** for quick access (`Cmd+Shift+G`)
 - **📱 Multiple access methods** - context menu, status bar, command palette
 - **🌍 Multi-language support** for JavaScript, TypeScript, Python, CSS, and more
-- **🧠 Smart path resolution** for relative and absolute paths
+- **🧠 Smart path resolution** for relative and absolute paths, path aliases (@, ~)
 - **🔍 Automatic file extension detection**
+- **💡 Rich visual feedback** with informative tooltips on hover
+
+### Visual Feedback
+
+Hover over any import path to see instant feedback:
+
+- **✅ File Found**: Shows file name, relative path, and click instructions
+- **📦 Library Import**: Identifies NPM packages and library imports
+- **❌ File Not Found**: Shows attempted search paths to help debug missing files
+- **🔍 Path Debugging**: Displays which paths were searched and why resolution failed
 - **🎯 Framework-friendly** - works with React, Vue, Angular, and more
 - **🔒 Security-first** - comprehensive security measures built-in
 

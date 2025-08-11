@@ -12,23 +12,27 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 
 	/**
 	 * Regular expressions to match different import statement patterns
+	 * Enhanced with multiline support and better pattern matching
 	 * Limited to safe patterns to prevent code injection
 	 */
 	private readonly importPatterns = [
-		// JavaScript/TypeScript import statements
-		/import\s+.*\s+from\s+['"`]([^'"`]+)['"`]/g,
-		/import\s+['"`]([^'"`]+)['"`]/g,
-		/require\(['"`]([^'"`]+)['"`]\)/g,
+		// JavaScript/TypeScript import statements (multiline support)
+		/import\s+[\s\S]*?\s+from\s+['"`]([^'"`]+)['"`]/gms,
+		/import\s+['"`]([^'"`]+)['"`]/gms,
+		/require\(['"`]([^'"`]+)['"`]\)/gms,
 
 		// Python import statements
-		/from\s+([^\s]+)\s+import/g,
-		/import\s+([^\s,]+)/g,
+		/from\s+([^\s]+)\s+import/gms,
+		/import\s+([^\s,]+)/gms,
 
 		// CSS/SCSS imports
-		/@import\s+['"`]([^'"`]+)['"`]/g,
+		/@import\s+['"`]([^'"`]+)['"`]/gms,
 
 		// Dynamic imports
-		/import\(['"`]([^'"`]+)['"`]\)/g,
+		/import\(['"`]([^'"`]+)['"`]\)/gms,
+
+		// Export statements
+		/export\s+[\s\S]*?\s+from\s+['"`]([^'"`]+)['"`]/gms,
 	];
 
 	/**
@@ -95,10 +99,38 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 				const resolvedPath = await this.resolveImportPath(document, importPath);
 				if (resolvedPath) {
 					const link = new vscode.DocumentLink(range, vscode.Uri.file(resolvedPath));
-					// Add tooltip with platform-specific instructions
+
+					// Enhanced tooltip with file status and type
 					const isMac = process.platform === 'darwin';
 					const modifier = isMac ? 'Cmd' : 'Ctrl';
-					link.tooltip = `Jump to ${path.basename(resolvedPath)} (${modifier}+Click, or right-click for context menu)`;
+					const fileName = path.basename(resolvedPath);
+
+					// Determine import type for tooltip
+					let importType = '';
+					let statusEmoji = '';
+
+					if (resolvedPath.includes('node_modules')) {
+						importType = ' (NPM package)';
+						statusEmoji = '📦 ';
+					} else if (importPath.startsWith('@') || importPath.startsWith('~')) {
+						importType = ' (Path alias)';
+						statusEmoji = '🔗 ';
+					} else if (importPath.startsWith('./') || importPath.startsWith('../')) {
+						importType = ' (Relative path)';
+						statusEmoji = '📁 ';
+					} else {
+						importType = ' (Local file)';
+						statusEmoji = '📄 ';
+					}
+
+					// Check if it's a directory
+					const isDirectory = await this.directoryExists(resolvedPath);
+					if (isDirectory) {
+						statusEmoji = '📂 ';
+						importType = ' (Directory)';
+					}
+
+					link.tooltip = `${statusEmoji}Jump to ${fileName}${importType} (${modifier}+Click)`;
 					links.push(link);
 				}
 			}
@@ -168,6 +200,295 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 	}
 
 	/**
+	 * Resolves library imports to node_modules files if enabled
+	 */
+	private async resolveLibraryPath(workspaceRoot: string, importPath: string): Promise<string | null> {
+		const config = vscode.workspace.getConfiguration('go-to-import');
+		const enableLibraryNavigation = config.get('enableLibraryNavigation', false);
+
+		if (!enableLibraryNavigation) {
+			return null;
+		}
+
+		// Only resolve library imports (no relative paths)
+		if (importPath.startsWith('./') || importPath.startsWith('../') || importPath.startsWith('/')) {
+			return null;
+		}
+
+		// Handle scoped packages (@org/package)
+		const packageName = importPath.startsWith('@')
+			? importPath.split('/').slice(0, 2).join('/')
+			: importPath.split('/')[0];
+
+		const nodeModulesPath = path.join(workspaceRoot, 'node_modules', packageName);
+
+		try {
+			// Check if package exists
+			if (!(await this.directoryExists(nodeModulesPath))) {
+				return null;
+			}
+
+			// Try to find package.json
+			const packageJsonPath = path.join(nodeModulesPath, 'package.json');
+			if (await this.fileExists(packageJsonPath)) {
+				const packageJsonContent = await fsPromises.readFile(packageJsonPath, 'utf8');
+				const packageInfo = JSON.parse(packageJsonContent);
+
+				// Try main field, then index files
+				if (packageInfo.main) {
+					const mainPath = path.join(nodeModulesPath, packageInfo.main);
+					if (await this.fileExists(mainPath)) {
+						return mainPath;
+					}
+				}
+			}
+
+			// Try common entry points
+			const entryPoints = ['index.js', 'index.ts', 'index.jsx', 'index.tsx', 'lib/index.js', 'dist/index.js'];
+			for (const entry of entryPoints) {
+				const entryPath = path.join(nodeModulesPath, entry);
+				if (await this.fileExists(entryPath)) {
+					return entryPath;
+				}
+			}
+
+			// If no specific file found, return the package directory
+			return nodeModulesPath;
+		} catch (error) {
+			console.warn('Go to Import: Error resolving library path:', error instanceof Error ? error.message : 'Unknown error');
+			return null;
+		}
+	}
+
+	/**
+	 * Resolves path aliases from vite.config.js, tsconfig.json, or webpack config
+	 */
+	private async resolvePathAlias(workspaceRoot: string, importPath: string, documentPath?: string): Promise<string | null> {
+		// Check for common path alias patterns
+		if (!importPath.startsWith('@') && !importPath.startsWith('~') && !importPath.startsWith('src/')) {
+			return null;
+		}
+
+		try {
+			// Start from the document directory and traverse up to find config files
+			const searchStartDir = documentPath ? path.dirname(documentPath) : workspaceRoot;
+
+			// Try to find vite config files by traversing up directories
+			const viteConfig = await this.findConfigFileUp(searchStartDir, workspaceRoot, [
+				'vite.config.js',
+				'vite.config.ts',
+				'vite.config.mjs',
+				'vitest.config.js',
+				'vitest.config.ts'
+			]);
+
+			if (viteConfig) {
+				const alias = await this.parseViteConfig(viteConfig, importPath);
+				if (alias) return alias;
+			}
+
+			// Try to find TypeScript config files
+			const tsConfig = await this.findConfigFileUp(searchStartDir, workspaceRoot, [
+				'tsconfig.json',
+				'jsconfig.json'
+			]);
+
+			if (tsConfig) {
+				const alias = await this.parseTsConfig(tsConfig, importPath);
+				if (alias) return alias;
+			}
+
+			// Try to find webpack config files
+			const webpackConfig = await this.findConfigFileUp(searchStartDir, workspaceRoot, [
+				'webpack.config.js',
+				'webpack.config.ts',
+				'webpack.config.babel.js',
+				'craco.config.js'
+			]);
+
+			if (webpackConfig) {
+				const alias = await this.parseWebpackConfig(webpackConfig, importPath);
+				if (alias) return alias;
+			}
+
+			// Fallback common patterns
+			if (importPath.startsWith('@/')) {
+				const srcPath = path.join(workspaceRoot, 'src', importPath.slice(2));
+				if (await this.fileExists(srcPath) || await this.directoryExists(srcPath)) {
+					return srcPath;
+				}
+			}
+
+			if (importPath.startsWith('~/')) {
+				const rootPath = path.join(workspaceRoot, importPath.slice(2));
+				if (await this.fileExists(rootPath) || await this.directoryExists(rootPath)) {
+					return rootPath;
+				}
+			}
+
+			if (importPath.startsWith('src/')) {
+				const srcPath = path.join(workspaceRoot, importPath);
+				if (await this.fileExists(srcPath) || await this.directoryExists(srcPath)) {
+					return srcPath;
+				}
+			}
+
+		} catch (error) {
+			console.warn('Go to Import: Error resolving path alias:', error instanceof Error ? error.message : 'Unknown error');
+		}
+
+		return null;
+	}
+
+	/**
+	 * Find a config file by traversing up directories from startDir to maxDir
+	 */
+	private async findConfigFileUp(startDir: string, maxDir: string, configFiles: string[]): Promise<string | null> {
+		let currentDir = path.resolve(startDir);
+		const normalizedMaxDir = path.resolve(maxDir);
+
+		// Ensure we don't traverse above the workspace root
+		while (currentDir.startsWith(normalizedMaxDir) && currentDir.length >= normalizedMaxDir.length) {
+			for (const configFile of configFiles) {
+				const configPath = path.join(currentDir, configFile);
+				if (await this.fileExists(configPath)) {
+					console.log(`Go to Import: Found config file: ${configPath}`);
+					return configPath;
+				}
+			}
+
+			const parentDir = path.dirname(currentDir);
+			// Break if we've reached the root or can't go up further
+			if (parentDir === currentDir) {
+				break;
+			}
+			currentDir = parentDir;
+		}
+
+		return null;
+	}
+
+	/**
+	 * Parse webpack config for path aliases
+	 */
+	private async parseWebpackConfig(configPath: string, importPath: string): Promise<string | null> {
+		try {
+			const configContent = await fsPromises.readFile(configPath, 'utf8');
+			const configDir = path.dirname(configPath);
+
+			// Simple regex to extract resolve.alias definitions
+			const aliasMatches = configContent.match(/resolve\s*:\s*{[^}]*alias\s*:\s*{([^}]+)}/s) ||
+							   configContent.match(/alias\s*:\s*{([^}]+)}/s);
+			if (!aliasMatches) return null;
+
+			const aliasContent = aliasMatches[1];
+
+			// Extract alias definitions
+			const aliasRegex = /['"`]?([^'"`:\s]+)['"`]?\s*:\s*['"`]([^'"`]+)['"`]/g;
+			let match;
+
+			while ((match = aliasRegex.exec(aliasContent)) !== null) {
+				const [, alias, aliasPath] = match;
+				if (importPath.startsWith(alias)) {
+					const resolvedPath = importPath.replace(alias, aliasPath);
+					return path.resolve(configDir, resolvedPath);
+				}
+			}
+		} catch (error) {
+			console.warn('Go to Import: Error parsing webpack config:', error instanceof Error ? error.message : 'Unknown error');
+		}
+		return null;
+	}
+
+	/**
+	 * Parse vite.config.js for path aliases
+	 */
+	private async parseViteConfig(configPath: string, importPath: string): Promise<string | null> {
+		try {
+			const configContent = await fsPromises.readFile(configPath, 'utf8');
+			const configDir = path.dirname(configPath);
+
+			// Enhanced regex to extract alias definitions from vite config
+			const aliasMatches = configContent.match(/alias\s*:\s*{([^}]+)}/s);
+			if (!aliasMatches) return null;
+
+			const aliasContent = aliasMatches[1];
+
+			// Handle different alias syntax patterns:
+			// 1. Simple quoted strings: '@': './src'
+			// 2. fileURLToPath syntax: '@': fileURLToPath(new URL('./src', import.meta.url))
+			// 3. path.resolve syntax: '@': path.resolve(__dirname, 'src')
+
+			const patterns = [
+				// Pattern 1: fileURLToPath(new URL('path', import.meta.url))
+				/['"`]?([^'"`:\s]+)['"`]?\s*:\s*fileURLToPath\s*\(\s*new\s+URL\s*\(\s*['"`]([^'"`]+)['"`]/g,
+
+				// Pattern 2: Simple quoted strings
+				/['"`]?([^'"`:\s]+)['"`]?\s*:\s*['"`]([^'"`]+)['"`]/g,
+
+				// Pattern 3: path.resolve or other function calls
+				/['"`]?([^'"`:\s]+)['"`]?\s*:\s*path\.resolve\s*\([^,]+,\s*['"`]([^'"`]+)['"`]/g
+			];
+
+			for (const aliasRegex of patterns) {
+				aliasRegex.lastIndex = 0; // Reset regex state
+				let match;
+
+				while ((match = aliasRegex.exec(aliasContent)) !== null) {
+					const [, alias, aliasPath] = match;
+					if (importPath.startsWith(alias)) {
+						const resolvedPath = importPath.replace(alias, aliasPath);
+						// Make path relative to config file directory
+						const finalPath = path.resolve(configDir, resolvedPath);
+
+						// Debug logging to verify subdirectory config is being used
+						console.log(`Go to Import: Resolved alias '${alias}' -> '${aliasPath}' from config: ${configPath}`);
+						console.log(`Go to Import: Final resolved path: ${finalPath}`);
+
+						return finalPath;
+					}
+				}
+			}
+		} catch (error) {
+			console.warn('Go to Import: Error parsing vite config:', error instanceof Error ? error.message : 'Unknown error');
+		}
+		return null;
+	}	/**
+	 * Parse tsconfig.json for path aliases
+	 */
+	private async parseTsConfig(configPath: string, importPath: string): Promise<string | null> {
+		try {
+			const configContent = await fsPromises.readFile(configPath, 'utf8');
+			const configDir = path.dirname(configPath);
+
+			// Remove comments and parse JSON
+			const cleanedContent = configContent.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '');
+			const config = JSON.parse(cleanedContent);
+
+			const paths = config?.compilerOptions?.paths;
+			if (!paths) return null;
+
+			for (const [pattern, mappings] of Object.entries(paths)) {
+				if (Array.isArray(mappings) && mappings.length > 0) {
+					// Convert TypeScript path pattern to regex
+					const regexPattern = pattern.replace(/\*/g, '(.*)');
+					const regex = new RegExp(`^${regexPattern}$`);
+					const match = importPath.match(regex);
+
+					if (match) {
+						const mapping = mappings[0].replace(/\*/g, match[1] || '');
+						const baseUrl = config?.compilerOptions?.baseUrl || '.';
+						return path.resolve(configDir, baseUrl, mapping);
+					}
+				}
+			}
+		} catch (error) {
+			console.warn('Go to Import: Error parsing tsconfig:', error instanceof Error ? error.message : 'Unknown error');
+		}
+		return null;
+	}
+
+	/**
 	 * Resolves the import path to an absolute file path
 	 */
 	private async resolveImportPath(document: vscode.TextDocument, importPath: string): Promise<string | null> {
@@ -181,17 +502,28 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 		let resolvedPath: string;
 
 		try {
+			// First try path aliases (vite, webpack, tsconfig) - start search from document location
+			const aliasPath = await this.resolvePathAlias(workspaceRoot, importPath, document.uri.fsPath);
+			if (aliasPath) {
+				resolvedPath = aliasPath;
+			}
 			// Handle relative paths
-			if (importPath.startsWith('./') || importPath.startsWith('../')) {
+			else if (importPath.startsWith('./') || importPath.startsWith('../')) {
 				resolvedPath = path.resolve(documentDir, importPath);
 			}
 			// Handle absolute paths from workspace root
 			else if (importPath.startsWith('/')) {
 				resolvedPath = path.join(workspaceRoot, importPath);
 			}
-			// Handle node_modules or other relative imports without explicit ./
+			// Handle library imports (npm packages)
 			else if (!path.isAbsolute(importPath)) {
-				// First try relative to current file
+				// Try library path first
+				const libraryPath = await this.resolveLibraryPath(workspaceRoot, importPath);
+				if (libraryPath) {
+					return libraryPath; // Return early for library paths
+				}
+
+				// Try relative to current file
 				resolvedPath = path.resolve(documentDir, importPath);
 				if (!(await this.fileExists(resolvedPath))) {
 					// Try common extensions
@@ -199,7 +531,7 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 					if (withExtensions) {
 						resolvedPath = withExtensions;
 					} else {
-						// Try node_modules or workspace relative
+						// Try workspace relative
 						resolvedPath = path.join(workspaceRoot, importPath);
 					}
 				}
@@ -363,6 +695,246 @@ class ImportLinkProvider implements vscode.DocumentLinkProvider {
 			}
 			return false;
 		}
+	}
+}
+
+/**
+ * HoverProvider that shows detailed information about import paths
+ * Provides rich visual feedback for both successful and failed import resolutions
+ */
+class ImportHoverProvider implements vscode.HoverProvider {
+	private linkProvider = new ImportLinkProvider();
+
+	async provideHover(
+		document: vscode.TextDocument,
+		position: vscode.Position,
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		_token: vscode.CancellationToken
+	): Promise<vscode.Hover | null> {
+		// Security check: Only operate on trusted workspaces
+		if (!vscode.workspace.isTrusted) {
+			return null;
+		}
+
+		// Security check: Only process files within the workspace
+		const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+		if (!workspaceFolder) {
+			return null;
+		}
+
+		// Security check: Only process file:// scheme documents
+		if (document.uri.scheme !== 'file') {
+			return null;
+		}
+
+		// Find import path at cursor position
+		const importInfo = this.getImportAtPosition(document, position);
+		if (!importInfo) {
+			return null;
+		}
+
+		const { importPath, range } = importInfo;
+
+		// Generate detailed hover information
+		const hoverContent = await this.generateHoverContent(document, importPath);
+		if (!hoverContent) {
+			return null;
+		}
+
+		return new vscode.Hover(hoverContent, range);
+	}
+
+	/**
+	 * Extract import path at the given position
+	 */
+	private getImportAtPosition(document: vscode.TextDocument, position: vscode.Position): { importPath: string; range: vscode.Range } | null {
+		const line = document.lineAt(position.line);
+		const text = line.text;
+
+		// Check all import patterns
+		const patterns = [
+			/import\s+[\s\S]*?\s+from\s+['"`]([^'"`]+)['"`]/g,
+			/import\s+['"`]([^'"`]+)['"`]/g,
+			/require\(['"`]([^'"`]+)['"`]\)/g,
+			/@import\s+['"`]([^'"`]+)['"`]/g,
+			/import\(['"`]([^'"`]+)['"`]\)/g,
+			/export\s+[\s\S]*?\s+from\s+['"`]([^'"`]+)['"`]/g,
+			/from\s+([^\s]+)\s+import/g,
+			/import\s+([^\s,]+)/g,
+		];
+
+		for (const pattern of patterns) {
+			pattern.lastIndex = 0;
+			let match;
+
+			while ((match = pattern.exec(text)) !== null) {
+				const importPath = match[1];
+				const matchStart = match.index + match[0].indexOf(importPath);
+				const matchEnd = matchStart + importPath.length;
+
+				// Check if cursor is within the import path
+				if (position.character >= matchStart && position.character <= matchEnd) {
+					const startPos = new vscode.Position(position.line, matchStart);
+					const endPos = new vscode.Position(position.line, matchEnd);
+					const range = new vscode.Range(startPos, endPos);
+
+					return { importPath, range };
+				}
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Generate rich hover content for the import path
+	 */
+	private async generateHoverContent(document: vscode.TextDocument, importPath: string): Promise<vscode.MarkdownString | null> {
+		const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
+		if (!workspaceFolder) {
+			return null;
+		}
+
+		const workspaceRoot = workspaceFolder.uri.fsPath;
+		const documentDir = path.dirname(document.uri.fsPath);
+		const isMac = process.platform === 'darwin';
+		const modifier = isMac ? 'Cmd' : 'Ctrl';
+
+		// Try to resolve the import path
+		const resolvedPath = await this.linkProvider['resolveImportPath'](document, importPath);
+
+		const markdown = new vscode.MarkdownString();
+		markdown.isTrusted = true;
+
+		if (resolvedPath) {
+			// SUCCESS CASE
+			const fileName = path.basename(resolvedPath);
+			const relativePath = path.relative(workspaceRoot, resolvedPath);
+			const isDirectory = await this.linkProvider['directoryExists'](resolvedPath);
+
+			let emoji = '📄';
+			let typeDescription = 'File';
+
+			if (isDirectory) {
+				emoji = '📂';
+				typeDescription = 'Directory';
+			} else if (resolvedPath.includes('node_modules')) {
+				emoji = '📦';
+				typeDescription = 'NPM Package';
+			} else if (importPath.startsWith('@') || importPath.startsWith('~')) {
+				emoji = '🔗';
+				typeDescription = 'Path Alias';
+			} else if (importPath.startsWith('./') || importPath.startsWith('../')) {
+				emoji = '📁';
+				typeDescription = 'Relative Import';
+			}
+
+			markdown.appendMarkdown(`### ${emoji} ${typeDescription} Found\n\n`);
+			markdown.appendMarkdown(`**File:** \`${fileName}\`\n\n`);
+			markdown.appendMarkdown(`**Path:** \`${relativePath}\`\n\n`);
+			markdown.appendMarkdown(`💡 **${modifier}+Click** to open\n\n`);
+
+			// Add additional context for libraries
+			if (resolvedPath.includes('node_modules')) {
+				const config = vscode.workspace.getConfiguration('go-to-import');
+				const enableLibraryNavigation = config.get('enableLibraryNavigation', false);
+
+				if (enableLibraryNavigation) {
+					markdown.appendMarkdown(`ℹ️ Library navigation is **enabled**\n\n`);
+				} else {
+					markdown.appendMarkdown(`⚠️ Library navigation is **disabled** - enable in settings to navigate to packages\n\n`);
+				}
+			}
+
+		} else {
+			// ERROR CASE - show what paths were attempted
+			markdown.appendMarkdown(`### ❌ File Not Found\n\n`);
+			markdown.appendMarkdown(`**Import:** \`${importPath}\`\n\n`);
+			markdown.appendMarkdown(`🔍 **Searched paths:**\n\n`);
+
+			// Generate list of attempted paths
+			const attemptedPaths = await this.generateAttemptedPaths(workspaceRoot, documentDir, importPath);
+
+			for (const attemptedPath of attemptedPaths) {
+				const relativePath = path.relative(workspaceRoot, attemptedPath);
+				markdown.appendMarkdown(`• \`${relativePath}\`\n`);
+			}
+
+			markdown.appendMarkdown(`\n💡 **Suggestions:**\n`);
+			markdown.appendMarkdown(`• Check if the file exists\n`);
+			markdown.appendMarkdown(`• Verify the import path is correct\n`);
+			markdown.appendMarkdown(`• Check path aliases in vite.config.js or tsconfig.json\n`);
+
+			// Check if it might be a library import
+			if (!importPath.startsWith('./') && !importPath.startsWith('../') && !importPath.startsWith('/')) {
+				markdown.appendMarkdown(`• This might be an NPM package - enable library navigation in settings\n`);
+			}
+		}
+
+		return markdown;
+	}
+
+	/**
+	 * Generate list of paths that would be attempted during resolution
+	 */
+	private async generateAttemptedPaths(workspaceRoot: string, documentDir: string, importPath: string): Promise<string[]> {
+		const paths: string[] = [];
+		const extensions = ['.ts', '.js', '.tsx', '.jsx', '.py', '.css', '.scss', '.less', '.json'];
+
+		// Handle different import types
+		if (importPath.startsWith('./') || importPath.startsWith('../')) {
+			// Relative paths
+			const basePath = path.resolve(documentDir, importPath);
+			paths.push(basePath);
+
+			// Try with extensions
+			for (const ext of extensions) {
+				paths.push(basePath + ext);
+			}
+
+			// Try index files in directory
+			for (const ext of extensions) {
+				paths.push(path.join(basePath, 'index' + ext));
+			}
+
+		} else if (importPath.startsWith('/')) {
+			// Absolute paths from workspace root
+			const basePath = path.join(workspaceRoot, importPath);
+			paths.push(basePath);
+
+			for (const ext of extensions) {
+				paths.push(basePath + ext);
+			}
+
+		} else if (importPath.startsWith('@') || importPath.startsWith('~')) {
+			// Path aliases
+			paths.push(path.join(workspaceRoot, 'src', importPath.slice(2)));
+			paths.push(path.join(workspaceRoot, importPath.slice(2)));
+
+			// Try with extensions
+			const srcPath = path.join(workspaceRoot, 'src', importPath.slice(2));
+			for (const ext of extensions) {
+				paths.push(srcPath + ext);
+			}
+
+		} else {
+			// Library or relative without ./
+			const relativePath = path.resolve(documentDir, importPath);
+			const workspacePath = path.join(workspaceRoot, importPath);
+			const nodeModulesPath = path.join(workspaceRoot, 'node_modules', importPath);
+
+			paths.push(relativePath);
+			paths.push(workspacePath);
+			paths.push(nodeModulesPath);
+
+			// Try with extensions
+			for (const ext of extensions) {
+				paths.push(relativePath + ext);
+				paths.push(workspacePath + ext);
+			}
+		}
+
+		return paths;
 	}
 }
 
@@ -547,13 +1119,22 @@ function registerLinkProviders(context: vscode.ExtensionContext) {
 	];
 
 	const linkProvider = new ImportLinkProvider();
+	const hoverProvider = new ImportHoverProvider();
 
 	for (const language of languages) {
-		const disposable = vscode.languages.registerDocumentLinkProvider(
+		// Register document link provider
+		const linkDisposable = vscode.languages.registerDocumentLinkProvider(
 			{ language, scheme: 'file' }, // Only register for file scheme
 			linkProvider
 		);
-		context.subscriptions.push(disposable);
+		context.subscriptions.push(linkDisposable);
+
+		// Register hover provider for rich visual feedback
+		const hoverDisposable = vscode.languages.registerHoverProvider(
+			{ language, scheme: 'file' },
+			hoverProvider
+		);
+		context.subscriptions.push(hoverDisposable);
 	}
 }
 

@@ -31,6 +31,10 @@ import {
 import { Button } from './components/Button';
 import Modal, { ModalHeader } from './components/Modal';
 
+import '../example/stores/api.js';
+import '@root/example/stores/api.js';
+import '@/stores/api.js';
+
 // Type definitions
 interface AppState {
     count: number;

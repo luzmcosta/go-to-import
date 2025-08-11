@@ -20,6 +20,8 @@ import config from './config.json';
 import { Button } from './components/Button';
 import Modal from './components/Modal';
 
+import '@/test-store.js'; // Using alias to test path resolution
+
 // Try importing the TypeScript demo file
 // import TSXDemo from './test-file.tsx';
 

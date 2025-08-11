@@ -13,7 +13,7 @@ export default [{
         sourceType: "module",
         parserOptions: {
             project: "./tsconfig.json",
-            tsconfigRootDir: import.meta.dirname || process.cwd(),
+            tsconfigRootDir: process.cwd(),
         },
     },
 

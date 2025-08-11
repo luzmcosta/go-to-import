@@ -2,7 +2,7 @@
   "name": "go-to-import",
   "displayName": "Go to Import",
   "description": "Navigate to files instantly with multiple methods: click, keyboard shortcuts, context menu, and status bar",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "publisher": "luzmcosta",
   "repository": {
     "type": "git",
@@ -55,6 +55,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show helpful notification about Cmd+Click conflicts on macOS"
+        },
+        "go-to-import.enableLibraryNavigation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable navigation to NPM packages in node_modules (security: only enable in trusted workspaces)"
         },
         "go-to-import.customKeybinding": {
           "type": "string",
